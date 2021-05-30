@@ -1,0 +1,186 @@
+-- table orders_clean
+CREATE or replace TABLE "orders_clean" AS
+SELECT DISTINCT o."Name" AS "Order_number"
+       ,o."Email"
+       ,TO_TIMESTAMP_TZ(o."Created_at") as "Date_time"
+       ,o1.previous_order
+       ,o1.difference_in_days
+       ,o."Lineitem_quantity" AS "Quantity"
+       ,o."Lineitem_name" AS "Title"
+       ,o."Lineitem_price" AS "Price"
+       ,o."Lineitem_sku" AS "Variant_SKU"
+       ,o."Discount_Amount" AS "Discount"
+       ,o."Currency"
+       ,o."Subtotal"
+       ,o."Shipping"
+       ,o."Total"
+FROM "orders" as o
+LEFT JOIN (select "Name"
+                  , "Email"
+                  , "Paid_at"
+                  , "Total"
+                  ,lag ("Created_at") over (partition by "Email" order by "Created_at", "Email" ) as previous_order
+                  ,datediff(day, previous_order, "Created_at") as difference_in_days
+          from "orders"
+          where "Total" != '') as o1
+ON o."Total" = o1."Total" and o."Email" = o1."Email" and o."Name"= o1."Name";
+
+DELETE FROM "orders_clean"
+WHERE previous_order is null and difference_in_days is null;
+
+DELETE FROM "orders_clean"
+WHERE "Variant_SKU" = 'bundle-2020072' AND ("Price" = '617' or  "Price" = '477');
+
+DELETE FROM "orders_clean"
+WHERE "Variant_SKU" = 'bundle-2020072' AND ("Price" = '617' or  "Price" = '477');
+
+DELETE FROM "orders_clean"
+WHERE "Variant_SKU" = '500537851' AND "Title" = 'PERLÍTO Černý rybíz (limitovaná edice Jaromír Jágr)';
+
+DELETE FROM "orders_clean"
+WHERE "Variant_SKU" = '153155126' AND "Price" = '189';
+
+DELETE FROM "orders_clean"
+WHERE "Variant_SKU" = '122529405' AND "Price" = '249';
+
+DELETE FROM "products_clean"
+WHERE "Variant_SKU" = '106900015' AND "Price" = '509';
+
+DELETE FROM "orders_clean"
+WHERE "Variant_SKU" = '106900006' AND "Price" = '0';
+
+delete from "orders_clean"
+where ("Discount"= '' and "Order_number" = '#E20203938') or ("Discount"= '' and "Order_number" = '#E20203903');
+
+--table customers
+UPDATE "obce" SET "PSC" = Replace("PSC", ' ', '');
+
+create or replace table "customers_clean" as
+select c.*
+        , o."PSC"
+        , o."OKRES"
+        , o."KRAJ"
+from (select c."ID"
+            , c."First_Name"
+            , c."Last_Name"
+            , g."gender"
+            , c."Email"
+            , c."Company"
+            , c."Accepts_Marketing"
+            , c."Address1"
+            , c."Address2"
+            , c."City"
+            , c."Country"
+            , c."Country_Code"
+            , c."Zip"
+            , c."Total_Spent"
+            , c."Total_Orders"
+      from "ID-customers" as c
+      LEFT JOIN "idgender1" as g
+      on c."ID"=g."id") as c
+LEFT JOIN (select *
+             from 
+                   (select distinct psc, okres, kraj from "obce")
+                    qualify row_number() over (partition by PSC order by null) = 1 order by psc asc) as o
+on c."Zip"=o."PSC";
+
+DELETE FROM "customers_clean" WHERE ("First_Name" is null or "First_Name" = '') and ("Last_Name" is null or "Last_Name" = '') and "Accepts_Marketing" = 'no';
+
+DELETE
+from "customers_clean"
+where "Zip" is null or "Zip" = '' and "Accepts_Marketing" = 'no' and "Total_Orders" < 1 and "Country_Code" = '' and "ID"<3012 and "ID">2747;
+
+DELETE 
+from "customers_clean"
+where "Email" is null or "Email" = '';
+
+DELETE
+FROM "customers_clean"
+WHERE "First_Name" = 'test' or "Last_Name" = 'test';
+
+UPDATE "customers_clean" SET "gender"='' 
+WHERE ("First_Name" is null or "First_Name" = '') and ("Last_Name" is null or "Last_Name" = '') and "Accepts_Marketing" = 'yes';
+
+UPDATE "customers_clean" SET "Zip" = '28907'
+WHERE "Zip"= '668/10';
+
+UPDATE "customers_clean" SET "Zip" = Replace("Zip", ' ', '');
+
+UPDATE "customers_clean" SET "Zip" = '39412'
+WHERE "City" = 'Obratan';
+
+UPDATE "customers_clean" SET "Zip" = '25101'
+WHERE "City" = 'Říčany';
+
+UPDATE "customers_clean" SET "Zip" = '25101'
+WHERE "City" = 'Říčany';
+
+UPDATE "customers_clean" SET "Zip" = '11000'
+WHERE "City" = 'Praha' and "Address1"= 'Národní';
+
+UPDATE "customers_clean" SET "Zip" = '11000'
+WHERE "City" = 'Praha' and "Address1"= 'Národní';
+
+--table products_clean
+CREATE or replace TABLE "products_clean" AS
+SELECT 
+        "Variant_SKU"
+       ,"Type"
+       ,"Title"
+       ,"Vendor"
+       ,"Variant_Price" AS "Price"
+       ,"Cost_per_item"
+       ,SPLIT_PART(SPLIT_PART("Tags",',',1),':',2) AS "Category" 
+FROM "products"
+WHERE "Vendor"!= 'Online degustace'
+AND "Variant_SKU" != ''
+AND "Type" NOT IN ('Dárkové poukazy', 'candyrack_generated');
+
+UPDATE "products_clean" SET "Type" = 'Dárky' WHERE "Variant_SKU" LIKE 'bundle-darek%';
+
+UPDATE "products_clean" SET "Type" = 'Dárky' WHERE "Variant_SKU" LIKE 'bundle-mdž%';
+
+UPDATE "products_clean" SET "Type" = 'Dárková sada vín' WHERE "Variant_SKU" LIKE 'bundle-202%';
+
+UPDATE "products_clean" SET "Type" = 'Růžová' WHERE "Variant_SKU" = '873530105';
+
+UPDATE "products_clean" SET "Type" = 'Bílá' WHERE "Variant_SKU" IN ('199345210-6','187210208-6', '187023231-6','176180216-6','157100206-6','302300325-6');
+
+UPDATE "products_clean" SET "Type" = 'Oranžová' WHERE "Variant_SKU" = '157100207-6';
+
+UPDATE "products_clean" SET "Type" = 'Perlivá' WHERE "Type" ='' AND "Variant_SKU" LIKE '13136037%';
+
+UPDATE "products_clean" SET "Type" = 'Perlivá' WHERE "Variant_SKU" = '5031508-6';
+
+UPDATE "products_clean" SET "Type" = 'Perlivá' WHERE "Variant_SKU" = '302300466-6';
+
+UPDATE "products_clean" SET "Type" = 'Ostatní' WHERE "Variant_SKU" = '114355278-6';
+
+DELETE FROM "products_clean"
+WHERE "Variant_SKU" != '' AND "Type" = '';
+
+DELETE FROM "products_clean"
+WHERE "Variant_SKU" = 'bundle-2020072' AND ("Price" = '617' or  "Price" = '477');
+
+DELETE FROM "products_clean"
+WHERE "Variant_SKU" = 'bundle-2020071' AND ("Price" = '776' OR "Price" = '916');
+
+DELETE FROM "products_clean"
+WHERE "Variant_SKU" = '500537851' AND "Title" = 'PERLÍTO Černý rybíz (limitovaná edice Jaromír Jágr)';
+
+DELETE FROM "products_clean"
+WHERE "Variant_SKU" = '153155126' AND "Price" = '189';
+
+DELETE FROM "products_clean"
+WHERE "Variant_SKU" = '122529405' AND "Price" = '249';
+
+DELETE FROM "products_clean"
+WHERE "Variant_SKU" = '106900015' AND "Price" = '439';
+
+DELETE FROM "products_clean"
+WHERE "Variant_SKU" = '106900006' AND "Price" = '0';
+
+--table date_time
+create or replace table "date_time_clean" as
+SELECT distinct "Name", TO_TIMESTAMP_TZ("Created_at") as date_time, to_date("Created_at") as date, to_time(date_time) as time
+from "orders";
